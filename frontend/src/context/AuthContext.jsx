@@ -58,15 +58,30 @@ export function AuthProvider({ children }) {
         }
       }
 
+      for (const account of DEMO_ACCOUNTS) {
+        try {
+          await registerToBackend(account);
+        } catch {
+          // Existing demo accounts are expected; backend availability is checked by login.
+        }
+      }
+
       if (saved) {
-        setUser(saved);
-      } else {
-        for (const account of DEMO_ACCOUNTS) {
+        const demoAccount = DEMO_ACCOUNTS.find((account) => account.email === saved.email);
+        if (demoAccount) {
           try {
-            await registerToBackend(account);
+            const tokenResponse = await loginToBackend({
+              username: demoAccount.username,
+              password: demoAccount.password,
+            });
+            localStorage.setItem('kutaksha_token', tokenResponse.access_token);
+            const profile = await getProfile();
+            setUser(normalizeUser({ ...profile, token: tokenResponse.access_token }));
           } catch {
-            // Ignore duplicate or unavailable backend responses.
+            setUser(saved);
           }
+        } else {
+          setUser(saved);
         }
       }
       setLoading(false);

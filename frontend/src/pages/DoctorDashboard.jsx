@@ -5,6 +5,8 @@ import { HsiRiskChart, buildTrendData } from '../components/LiveCharts';
 import { normalizeMetrics, checkDeviations, DEFAULT_BASELINE, hsiFromCurrent, riskFromCurrent, riskLabel } from '../utils/metrics';
 import { getPatients, getPatientMetrics, getLatestMetrics } from '../utils/storage';
 import { downloadReport, downloadCSV } from '../utils/reports';
+import { useCareTeamAlerts } from '../hooks/useCareTeamAlerts';
+import { CareTeamAlertFeed } from '../components/DashboardWidgets';
 
 function PatientCard({ patient, onSelect, selected }) {
   const latest = getLatestMetrics(patient.id);
@@ -47,6 +49,7 @@ export default function DoctorDashboard() {
   const patients = getPatients();
   const [selectedId, setSelectedId] = useState(patients[0]?.id || 'p1');
   const [history, setHistory] = useState([]);
+  const { notifications, error: notificationError } = useCareTeamAlerts();
 
   const patient = patients.find((p) => p.id === selectedId);
   const baseline = normalizeMetrics(patient?.baseline, DEFAULT_BASELINE);
@@ -88,6 +91,10 @@ export default function DoctorDashboard() {
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">All Patients — AI Tracker Overview</h2>
             <p className="mt-1 text-xs text-slate-500">Dr. {user?.name?.replace('Dr. ', '')} — {patients.length} patients registered</p>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <CareTeamAlertFeed notifications={notifications} error={notificationError} />
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import inspect, text
 
 from app.database import Base, engine
 from app.api.auth_routes import router as auth_router
@@ -9,10 +10,32 @@ from app.api.camera_routes import router as camera_router
 from app.api.dashboard_routes import router as dashboard_router
 from app.api.demo_routes import router as demo_router
 from app.api.chat_routes import router as chat_router
+from app.api.notification_routes import router as notification_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.services.rag_service import RagUnavailable
 
 Base.metadata.create_all(bind=engine)
+
+alert_columns = {
+    column["name"]
+    for column in inspect(engine).get_columns("care_team_alert_notifications")
+}
+with engine.begin() as connection:
+    for column_name, column_type in (
+        ("metric", "VARCHAR(80)"),
+        ("direction", "VARCHAR(20)"),
+        ("current", "FLOAT"),
+        ("baseline", "FLOAT"),
+        ("deviation", "FLOAT"),
+        ("unit", "VARCHAR(30)"),
+    ):
+        if column_name not in alert_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE care_team_alert_notifications "
+                    f"ADD COLUMN {column_name} {column_type}"
+                )
+            )
 
 app = FastAPI(title="Kutaksha Backend", version="0.1.0", description="AI-powered preventive elder wellness platform")
 
@@ -31,6 +54,7 @@ app.include_router(camera_router, prefix="/camera", tags=["camera"])
 app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(demo_router, prefix="/api", tags=["demo"])
 app.include_router(chat_router, prefix="/chat", tags=["chat"])
+app.include_router(notification_router, prefix="/notifications", tags=["notifications"])
 
 
 @app.exception_handler(RagUnavailable)

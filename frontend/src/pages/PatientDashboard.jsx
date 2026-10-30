@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import CameraTracker from '../components/CameraTracker';
+import PersonDetector from '../components/PersonDetector';
 import { HsiRiskChart, MultiMetricGrid, buildTrendData } from '../components/LiveCharts';
 import { ScoreCards, MetricsTable, InsightPanel, AlertBanner } from '../components/DashboardWidgets';
 import { normalizeMetrics, checkDeviations, sustainedDeviations, DEFAULT_BASELINE } from '../utils/metrics';
 import { getPatient, savePatientMetrics, getPatientMetrics, saveAlert } from '../utils/storage';
+import { describeApiError, publishAlert } from '../utils/api';
 
 export default function PatientDashboard() {
   const { user } = useAuth();
@@ -15,7 +16,8 @@ export default function PatientDashboard() {
   const [history, setHistory] = useState([]);
   const [tracking, setTracking] = useState(false);
   const [alerts, setAlerts] = useState([]);
-  const saveTimerRef = useRef(null);
+  const [alertDeliveryError, setAlertDeliveryError] = useState('');
+  const lastSampleAtRef = useRef(0);
   const lastAlertRef = useRef({});
   const historyRef = useRef([]);
 
@@ -36,6 +38,10 @@ export default function PatientDashboard() {
       balance_score: metrics.balanceScore,
       tremor_index: metrics.tremorIndex,
       gait_rhythm: metrics.gaitRhythm,
+      posture_stability: metrics.postureStability,
+      step_stride: metrics.stepStride,
+      fatigue_index: metrics.fatigueIndex,
+      movement_variability: metrics.movementVariability,
     }, baseline);
 
     setCurrent(normalized);
@@ -51,16 +57,24 @@ export default function PatientDashboard() {
       if (!lastAlertRef.current[key] || now - lastAlertRef.current[key] > 30000) {
         lastAlertRef.current[key] = now;
         saveAlert({ ...alert, patientId: patient?.id, patientName: patient?.name });
+        if (localStorage.getItem('kutaksha_token')) {
+          publishAlert(alert, { ...patient, id: patient?.id || 'p1' })
+            .then(() => setAlertDeliveryError(''))
+            .catch((error) => setAlertDeliveryError(`Could not notify the care team: ${describeApiError(error)}`));
+        } else {
+          setAlertDeliveryError('Sign in to a backend account to deliver alerts to other devices.');
+        }
       }
     }
 
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const entry = savePatientMetrics(patient?.id || 'p1', normalized);
-      const nextHistory = [...historyRef.current.slice(-59), entry];
-      historyRef.current = nextHistory;
-      setHistory(nextHistory);
-    }, 500);
+    const now = Date.now();
+    if (now - lastSampleAtRef.current < 1000) return;
+
+    lastSampleAtRef.current = now;
+    const entry = savePatientMetrics(patient?.id || 'p1', normalized);
+    const nextHistory = [...historyRef.current.slice(-59), entry];
+    historyRef.current = nextHistory;
+    setHistory(nextHistory);
   }, [baseline, patient]);
 
   const trendData = buildTrendData(history, baseline);
@@ -72,7 +86,7 @@ export default function PatientDashboard() {
           <div>
             <p className="text-[11px] uppercase tracking-[0.32em] text-emerald-700">Patient Dashboard</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">AI Health Tracking — {patient?.name}</h2>
-            <p className="mt-1 text-xs text-slate-500">{tracking ? 'Live walking-focused tracking active — mobility metrics updating in real time' : 'Enable camera access to start live walking analysis'}</p>
+            <p className="mt-1 text-xs text-slate-500">{tracking ? 'Live person detection active — movement and proxy metrics updating in real time' : 'Allow camera access and step into view to start tracking'}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${tracking ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -82,15 +96,22 @@ export default function PatientDashboard() {
           </div>
         </div>
 
-        {alerts.length > 0 && (
-          <div className="mt-4">
-            <AlertBanner alerts={alerts} />
-          </div>
-        )}
+        <div className="mt-4 h-28 overflow-y-auto" aria-live="polite">
+          <AlertBanner alerts={alerts} />
+          {alertDeliveryError && (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              {alertDeliveryError}
+            </p>
+          )}
+        </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <article className="rounded-2xl border border-slate-200 bg-white p-4">
-            <CameraTracker onMetricsUpdate={handleMetricsUpdate} />
+            <PersonDetector
+              onMetricsUpdate={handleMetricsUpdate}
+              onDetectionUpdate={({ detected }) => setTracking(detected)}
+            />
+            <p className="mt-2 text-xs text-slate-500">Person detection runs locally in your browser. Movement-derived wellness metrics are estimates, not measured walking or clinical assessments.</p>
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white p-4">

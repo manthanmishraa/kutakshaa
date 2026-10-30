@@ -18,7 +18,7 @@ const DEMO_PATIENTS = [
   {
     id: 'p1',
     name: 'Rajesh Kumar',
-    age: 72,
+    age: 64,
     condition: 'Mild mobility decline',
     previousMedicalConditions: [
       { condition: 'Hypertension', diagnosed: '2016', status: 'Controlled with ongoing treatment' },
@@ -49,7 +49,21 @@ function write(key, value) {
 
 export function initStorage() {
   if (!read(KEYS.USERS)) write(KEYS.USERS, DEMO_USERS);
-  if (!read(KEYS.PATIENTS)) write(KEYS.PATIENTS, DEMO_PATIENTS);
+  const patients = read(KEYS.PATIENTS, null);
+  if (!patients) {
+    write(KEYS.PATIENTS, DEMO_PATIENTS);
+  } else {
+    const updatedPatients = patients.map((patient) => (
+      patient.id === 'p1'
+        ? { ...patient, name: 'Rajesh Kumar', age: 64 }
+        : patient
+    ));
+    if (updatedPatients.some((patient, index) => (
+      patient.name !== patients[index]?.name || patient.age !== patients[index]?.age
+    ))) {
+      write(KEYS.PATIENTS, updatedPatients);
+    }
+  }
 
   // Keep the demo session clean so stale simulation data is not replayed on refresh.
   write(KEYS.METRICS, {});

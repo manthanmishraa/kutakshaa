@@ -120,6 +120,30 @@ export async function getProfile() {
   return request('/auth/profile');
 }
 
+export async function publishAlert(alert, patient) {
+  return request('/notifications/alerts', {
+    method: 'POST',
+    body: JSON.stringify({
+      patient_id: patient.id,
+      patient_name: patient.name,
+      patient_age: patient.age,
+      metric: alert.metric,
+      label: alert.label,
+      message: alert.message,
+      severity: alert.severity,
+      direction: alert.direction,
+      current: alert.current,
+      baseline: alert.baseline,
+      deviation: alert.deviation,
+      unit: alert.unit,
+    }),
+  });
+}
+
+export async function getCareTeamAlerts() {
+  return request('/notifications/alerts?limit=50');
+}
+
 export async function logoutBackend() {
   return request('/auth/logout', {
     method: 'POST',
@@ -131,6 +155,8 @@ export default {
   loginToBackend,
   registerToBackend,
   getProfile,
+  publishAlert,
+  getCareTeamAlerts,
   logoutBackend,
   askRag,
   describeApiError,

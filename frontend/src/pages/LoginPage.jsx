@@ -18,23 +18,38 @@ export default function LoginPage({ onNavigate }) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const session = await login(email, password);
-    if (session) {
-      const routes = { patient: '/dashboard/patient', caretaker: '/dashboard/caretaker', doctor: '/dashboard/doctor' };
-      onNavigate(routes[session.role] || '/');
-    } else {
-      setError('Invalid email or password');
+    try {
+      const session = await login(email.trim(), password);
+      if (session) {
+        const routes = { patient: '/dashboard/patient', caretaker: '/dashboard/caretaker', doctor: '/dashboard/doctor' };
+        onNavigate(routes[session.role] || '/');
+      } else {
+        setError('Invalid email or password');
+      }
+    } catch (loginError) {
+      setError(loginError.message || 'Unable to sign in. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const quickLogin = async (account) => {
     setEmail(account.email);
     setPassword(account.password);
-    const session = await login(account.email, account.password);
-    if (session) {
-      const routes = { patient: '/dashboard/patient', caretaker: '/dashboard/caretaker', doctor: '/dashboard/doctor' };
-      onNavigate(routes[session.role] || '/');
+    setError('');
+    setLoading(true);
+    try {
+      const session = await login(account.email, account.password);
+      if (session) {
+        const routes = { patient: '/dashboard/patient', caretaker: '/dashboard/caretaker', doctor: '/dashboard/doctor' };
+        onNavigate(routes[session.role] || '/');
+      } else {
+        setError('Demo sign-in failed. Check that the backend is running and try again.');
+      }
+    } catch (loginError) {
+      setError(loginError.message || 'Unable to sign in. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,6 +105,7 @@ export default function LoginPage({ onNavigate }) {
                 key={acc.role}
                 type="button"
                 onClick={() => quickLogin(acc)}
+                disabled={loading}
                 className={`rounded-lg border px-3 py-2 text-left text-xs transition hover:shadow-sm border-${acc.color}-200 bg-${acc.color}-50 text-${acc.color}-800`}
                 style={{
                   borderColor: acc.color === 'emerald' ? '#a7f3d0' : acc.color === 'amber' ? '#fde68a' : '#bae6fd',
