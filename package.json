@@ -1,0 +1,16 @@
+{
+  "name": "kutaksha-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kutaksha Preventive Elder Wellness Platform",
+  "scripts": {
+    "preview": "npm --prefix frontend run preview",
+    "preview:frontend": "npm --prefix frontend run preview",
+    "preview:build": "npm --prefix frontend run build && npm --prefix frontend run preview",
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "backend": "powershell -NoProfile -Command \"cd backend; & ..\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000\"",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend test"
+  }
+}
