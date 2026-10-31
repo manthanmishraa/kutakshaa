@@ -29,6 +29,9 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "128"))
+OLLAMA_NUM_GPU = int(os.getenv("OLLAMA_NUM_GPU", "22"))
 
 _service: Optional[RagService] = None
 _lock = threading.Lock()
@@ -115,7 +118,14 @@ def _build_graph():
     if LLM_PROVIDER == "ollama":
         from langchain_ollama import ChatOllama
 
-        llm = ChatOllama(model=OLLAMA_MODEL, temperature=0)
+        llm = ChatOllama(
+            model=OLLAMA_MODEL,
+            temperature=0,
+            num_ctx=OLLAMA_NUM_CTX,
+            num_predict=OLLAMA_NUM_PREDICT,
+            num_gpu=OLLAMA_NUM_GPU,
+            keep_alive="30m",
+        )
     else:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -173,9 +183,18 @@ def _build_graph():
             return "No query was supplied to RAG."
 
         if search_type == "medical_report":
-            # Medical questions must see every dated report so the model can
-            # compare the complete history, not just nearest-neighbor chunks.
-            docs = all_medical_docs
+            needs_history = re.search(
+                r"\b(compare|trend|patterns?|over time|history|all reports|"
+                r"across reports|changes?|decline|summari[sz]e|key findings|"
+                r"case notes?)\b",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if needs_history:
+                # Keep the full dated set for questions that explicitly need trends.
+                docs = all_medical_docs
+            else:
+                docs = medical_store.similarity_search(query, k=3)
         else:
             docs = retriever.invoke(query)
         if not docs:
@@ -210,13 +229,25 @@ def _build_graph():
         context = state.get("behavior_context") or {}
         if not context:
             return "No frontend behavior data was supplied for this question."
-        return json.dumps(context, ensure_ascii=True, indent=2)
+        compact_context = {
+            **context,
+            "history": (context.get("history") or [])[-6:],
+            "graph_trend": (context.get("graph_trend") or [])[-6:],
+        }
+        return json.dumps(compact_context, ensure_ascii=True, separators=(",", ":"))
 
     def conversation_evidence(state: Dict[str, Any]) -> str:
         history = state.get("chat_history") or []
         if not history:
             return "No earlier conversation turns were supplied."
-        return json.dumps(history[-6:], ensure_ascii=True, indent=2)
+        compact_history = [
+            {
+                "user": str(turn.get("user", ""))[:300],
+                "assistant": str(turn.get("assistant", ""))[:600],
+            }
+            for turn in history[-2:]
+        ]
+        return json.dumps(compact_history, ensure_ascii=True, separators=(",", ":"))
 
     def focus_instruction(query: str) -> str:
         lowered = query.lower()
@@ -244,10 +275,26 @@ def _build_graph():
         )
 
     def structured_answer(state: Dict[str, Any]) -> Optional[str]:
-        """Answer exact ID and speed lookups without LLM paraphrasing."""
+        """Answer exact ID, medication, and speed lookups without LLM paraphrasing."""
         query = (state.get("user_query") or "").lower()
         behavior = state.get("behavior_context") or {}
         context = state.get("retrieved_context") or ""
+
+        if (
+            re.search(r"\b(medication|medicine|medicines|medications|prescribed)\b", query)
+            and not re.search(r"\b(change|changed|compare|history|over time|all)\b", query)
+        ):
+            medications = []
+            for block in context.split("\n\n---\n\n"):
+                match = re.search(
+                    r"Medication record\s*\n([^\n]+)", block, flags=re.IGNORECASE
+                )
+                if match:
+                    medication = match.group(1).strip()
+                    if medication not in medications:
+                        medications.append(medication)
+            if medications:
+                return "The retrieved medical reports list: " + "; ".join(medications)
 
         if re.search(
             r"\b(id|identifier|patient\s+id|patient's\s+id|case\s+id)\b",
@@ -305,7 +352,9 @@ def _build_graph():
                 return answer
 
         if re.search(
-            r"(key findings|case notes|clinical findings|main findings|summari[sz]e.*(case|record|report))",
+            r"(key findings|case notes|clinical findings|main findings|"
+            r"summari[sz]e.*(case|record|report)|patterns?.*(report|record)|"
+            r"(report|record).*(patterns?|trends?))",
             query,
         ):
             dates = re.findall(r"Record date:\s*(\d{4}-\d{2}-\d{2})", context)
@@ -510,8 +559,9 @@ def _build_graph():
 Answer any user question that can be supported by the retrieved records, frontend behavior evidence, or earlier conversation below.
 
 Rules:
+- Answer in no more than 4 concise sentences unless the user asks for a full comparison or report.
 - Use the retrieved records as the evidence.
-- For report questions, compare all available dated reports in the ten-day window with the current tracking values; do not rely on only one report.
+- When multiple dated reports are provided, compare them with current tracking values only when relevant.
 - Follow the focus instruction exactly. A focused question must receive a focused answer, not a general report.
 - Follow the scope instruction exactly.
 - Answer the specific question directly; do not force it into a predefined category.

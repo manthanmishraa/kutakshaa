@@ -30,6 +30,33 @@ export function AlertBanner({ alerts }) {
   );
 }
 
+export function CareTeamAlertFeed({ notifications, error }) {
+  return (
+    <section className="h-36 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4" aria-live="polite">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600">Care-team alerts</h3>
+      {error ? (
+        <p className="mt-2 text-xs text-amber-800">{error}</p>
+      ) : notifications.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-500">No alerts received yet.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {notifications.slice(0, 10).map((notification) => (
+            <li key={notification.id} className="rounded-lg bg-slate-50 p-2">
+              <p className="text-xs font-semibold text-slate-800">
+                {notification.patient_name}{notification.patient_age ? `, ${notification.patient_age} yrs` : ''} — {notification.title}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">{notification.body}</p>
+              <time className="mt-1 block text-[10px] text-slate-400" dateTime={notification.created_at}>
+                {new Date(notification.created_at).toLocaleString()}
+              </time>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function MetricsTable({ current, baseline }) {
   const keys = Object.keys(METRIC_LABELS);
 

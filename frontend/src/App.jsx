@@ -24,6 +24,11 @@ const PROTECTED_ROUTES = {
   '/dashboard/caretaker': 'caretaker',
   '/dashboard/doctor': 'doctor',
 };
+const ROLE_ROUTES = {
+  patient: '/dashboard/patient',
+  caretaker: '/dashboard/caretaker',
+  doctor: '/dashboard/doctor',
+};
 
 function AppRoutes() {
   const [path, setPath] = useState(getPathname());
@@ -44,12 +49,17 @@ function AppRoutes() {
   };
 
   useEffect(() => {
+    if (loading) return;
+    if (path === '/login' && user) {
+      navigate(ROLE_ROUTES[user.role] || '/');
+      return;
+    }
+
     const requiredRole = PROTECTED_ROUTES[path];
-    if (!requiredRole || loading) return;
+    if (!requiredRole) return;
     if (!user) return;
     if (user.role !== requiredRole) {
-      const routes = { patient: '/dashboard/patient', caretaker: '/dashboard/caretaker', doctor: '/dashboard/doctor' };
-      navigate(routes[user.role] || '/login');
+      navigate(ROLE_ROUTES[user.role] || '/login');
     }
   }, [path, user, loading]);
 
@@ -77,7 +87,9 @@ function AppRoutes() {
       case '/assistant':
         return <AssistantPage onNavigate={navigate} />;
       case '/login':
-        return <LoginPage onNavigate={navigate} />;
+        return user
+          ? <div className="flex min-h-[50vh] items-center justify-center text-sm text-slate-500">Redirecting...</div>
+          : <LoginPage onNavigate={navigate} />;
       case '/dashboard/patient':
         return <PatientDashboard />;
       case '/dashboard/caretaker':

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -147,6 +147,44 @@ class ChatQueryResponse(BaseModel):
     answer: str
     intent: str
     sources: List[str] = Field(default_factory=list)
+
+
+class AlertBroadcastRequest(BaseModel):
+    patient_id: str = Field(min_length=1, max_length=80)
+    patient_name: str = Field(min_length=1, max_length=255)
+    patient_age: Optional[int] = Field(default=None, ge=0, le=130)
+    metric: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=1000)
+    severity: Literal["critical", "warning", "caution"]
+    direction: str = Field(min_length=1, max_length=20)
+    current: float
+    baseline: float
+    deviation: float = Field(ge=0)
+    unit: Optional[str] = Field(default=None, max_length=30)
+
+
+class AlertNotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: str
+    patient_name: str
+    patient_age: Optional[int] = None
+    metric: Optional[str] = None
+    title: str
+    body: str
+    severity: str
+    direction: Optional[str] = None
+    current: Optional[float] = None
+    baseline: Optional[float] = None
+    deviation: Optional[float] = None
+    unit: Optional[str] = None
+    created_at: datetime
+
+
+class AlertBroadcastResult(BaseModel):
+    recipient_count: int
 
 
 class DashboardSummary(BaseModel):

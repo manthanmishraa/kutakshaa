@@ -1,20 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { HsiRiskChart, MultiMetricGrid, buildTrendData } from '../components/LiveCharts';
 import { ScoreCards, MetricsTable, InsightPanel, AlertBanner } from '../components/DashboardWidgets';
 import { normalizeMetrics, checkDeviations, DEFAULT_BASELINE, hsiFromCurrent, riskFromCurrent } from '../utils/metrics';
 import { getPatient, getPatientMetrics, getAlerts } from '../utils/storage';
 import { downloadReport, downloadCSV } from '../utils/reports';
+import { useCareTeamAlerts } from '../hooks/useCareTeamAlerts';
+import { CareTeamAlertFeed } from '../components/DashboardWidgets';
 
 export default function CaretakerDashboard() {
   const { user } = useAuth();
   const patient = getPatient(user?.patientId || 'p1');
-  const baseline = normalizeMetrics(patient?.baseline, DEFAULT_BASELINE);
+  const baseline = useMemo(
+    () => normalizeMetrics(patient?.baseline, DEFAULT_BASELINE),
+    [patient?.id],
+  );
 
   const [history, setHistory] = useState([]);
   const [current, setCurrent] = useState({ ...baseline });
   const [alerts, setAlerts] = useState([]);
   const [storedAlerts, setStoredAlerts] = useState([]);
+  const { notifications, error: notificationError } = useCareTeamAlerts();
 
   useEffect(() => {
     const pid = patient?.id || 'p1';
@@ -68,6 +74,10 @@ export default function CaretakerDashboard() {
               Export CSV
             </button>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <CareTeamAlertFeed notifications={notifications} error={notificationError} />
         </div>
 
         {(alerts.length > 0 || storedAlerts.filter((a) => !a.read).length > 0) && (

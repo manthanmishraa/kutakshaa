@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -8,7 +8,7 @@ import {
   YAxis,
   Tooltip,
 } from 'recharts';
-import CameraTracker from '../components/CameraTracker';
+import PersonDetector from '../components/PersonDetector';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -120,49 +120,16 @@ async function fetchJson(path, options = {}) {
 
 export default function DemoPage() {
   const [isSimulated, setIsSimulated] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [detectStatus, setDetectStatus] = useState('No frame analyzed yet.');
-  const [fingerSpeed, setFingerSpeed] = useState(0);
   const [llmSummary, setLlmSummary] = useState('Generating preventive insight...');
   const [liveTwin, setLiveTwin] = useState(null);
   const [liveTrend, setLiveTrend] = useState([]);
   const [liveRisk, setLiveRisk] = useState(null);
-  const [featureSnapshot, setFeatureSnapshot] = useState(null);
+  const [personDetection, setPersonDetection] = useState({ detected: false, moving: false });
   const [dataMode, setDataMode] = useState(API_BASE ? 'backend' : 'demo');
-
-  const speedBuffer = useRef([]);
-
-  const handleSpeedUpdate = useCallback((speed) => {
-    setFingerSpeed(speed);
-    if (speed > 0) {
-       speedBuffer.current.push(speed);
-       if (speedBuffer.current.length > 15) speedBuffer.current.shift();
-    } else {
-       if (speedBuffer.current.length > 0) speedBuffer.current.shift();
-    }
-
-    if (speedBuffer.current.length === 0) return;
-
-    const avgSpeed = speedBuffer.current.reduce((a, b) => a + b, 0) / speedBuffer.current.length;
-    
-    // Trigger decline if speed drops below 0.8
-    if (avgSpeed < 0.8 && avgSpeed > 0) {
-      if (!isSimulated) {
-        setIsSimulated(true);
-      }
-    } else if (avgSpeed >= 1.0) {
-      if (isSimulated) {
-        setIsSimulated(false);
-      }
-    }
-  }, [isSimulated]);
 
   const baselineData = normalizeMetrics(liveTwin?.baseline, baseline);
   
-  // Update fallback current based on finger speed when available
-  const activeSpeed = fingerSpeed > 0 ? fingerSpeed : (isSimulated ? declineCurrent.walking_speed : stableCurrent.walking_speed);
-  
-  const fallbackCurrent = isSimulated ? { ...declineCurrent, walking_speed: activeSpeed } : { ...stableCurrent, walking_speed: activeSpeed };
+  const fallbackCurrent = isSimulated ? declineCurrent : stableCurrent;
   const currentData = normalizeMetrics(liveTwin?.current, fallbackCurrent);
   const trend = liveTrend.length > 0 ? liveTrend : (isSimulated ? declineTrend : stableTrend);
   const computedHsi = hsiFromCurrent(currentData, baselineData);
@@ -240,13 +207,6 @@ export default function DemoPage() {
     return () => { mounted = false; };
   }, [isSimulated]);
 
-  const handleAnalyze = async () => {
-    // Disabled manual analysis since we are using continuous tracking
-    setDetectStatus('Using continuous local AI tracking via MediaPipe.');
-  };
-
-
-
   return (
     <div className="mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8 xl:px-10">
       <section className="rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
@@ -263,24 +223,20 @@ export default function DemoPage() {
             >
               {isSimulated ? 'Show Baseline' : 'Simulate Decline'}
             </button>
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Continuous Tracking Active'}
-            </button>
           </div>
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <article className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-black">
-              <CameraTracker onSpeedUpdate={handleSpeedUpdate} />
+              <PersonDetector onDetectionUpdate={setPersonDetection} />
             </div>
-            <p className="mt-2 text-xs text-slate-600 font-medium text-emerald-600">{fingerSpeed > 0 ? `Tracking Fingers! Speed: ${fingerSpeed.toFixed(2)}` : 'Waiting for hand in frame...'}</p>
-            <p className="mt-1 text-xs text-slate-500">Data source: Local MediaPipe Edge AI</p>
+            <p className={`mt-2 text-xs font-semibold ${personDetection.detected ? 'text-emerald-700' : 'text-slate-600'}`}>
+              {personDetection.detected
+                ? personDetection.moving ? 'Person detected and moving.' : 'Person detected.'
+                : 'No person detected yet.'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Camera detection runs locally in your browser. Wellness scores below are demo data.</p>
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -351,11 +307,6 @@ export default function DemoPage() {
               <p className="text-sm text-slate-700">{summary}</p>
               <p className="mt-3 text-sm text-slate-700">{llmSummary}</p>
             </div>
-            {featureSnapshot && (
-              <p className="mt-3 text-xs text-slate-600">
-                Latest features: speed {asNumber(featureSnapshot.walking_speed ?? featureSnapshot.walkingSpeed, currentData.walking_speed).toFixed(2)} m/s, activity {asNumber(featureSnapshot.activity_level ?? featureSnapshot.activityLevel ?? featureSnapshot.activity, currentData.activity_level)}%.
-              </p>
-            )}
           </article>
         </div>
       </section>

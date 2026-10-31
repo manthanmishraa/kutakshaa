@@ -19,6 +19,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     patients = relationship("Patient", back_populates="owner")
+    received_alerts = relationship("CareTeamAlertNotification", back_populates="recipient")
 
 
 class Patient(Base):
@@ -153,3 +154,25 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     patient = relationship("Patient", back_populates="notifications")
+
+
+class CareTeamAlertNotification(Base):
+    __tablename__ = "care_team_alert_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    patient_id = Column(String(80), nullable=False, index=True)
+    patient_name = Column(String(255), nullable=False)
+    patient_age = Column(Integer, nullable=True)
+    metric = Column(String(80), nullable=True)
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    severity = Column(String(20), nullable=False)
+    direction = Column(String(20), nullable=True)
+    current = Column(Float, nullable=True)
+    baseline = Column(Float, nullable=True)
+    deviation = Column(Float, nullable=True)
+    unit = Column(String(30), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    recipient = relationship("User", back_populates="received_alerts")
