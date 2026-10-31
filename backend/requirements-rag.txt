@@ -1,0 +1,15 @@
+# Optional RAG assistant stack (app/ai/rag_graph.py).
+# The backend runs without these; /chat/query returns 503 until they are installed.
+#   pip install -r requirements-rag.txt
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-google-genai>=2.0.0
+langchain-ollama>=0.2.0
+langchain-huggingface>=0.1.0
+langchain-text-splitters>=0.3.0
+faiss-cpu>=1.7.0
+pymupdf>=1.24.0
+sentence-transformers>=3.0.0
+python-dotenv>=1.0.0
